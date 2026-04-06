@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Campus Parking Slot Management System – efficient parking booking for students, staff, and administrators.">
+    <title>{% block title %}CPSMS{% endblock %} – Campus Parking</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- ─── Navigation ──────────────────────────────────────────────── -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">
+                <span class="brand-icon">🅿️</span>
+                <span class="brand-text">CPSMS</span>
+            </a>
+            {% if session.get('user_id') %}
+            <div class="nav-links">
+                {% if session.get('role') == 'admin' %}
+                    <a href="{{ url_for('admin.dashboard') }}" class="nav-link">Dashboard</a>
+                {% elif session.get('role') == 'parking_staff' %}
+                    <a href="{{ url_for('staff.dashboard') }}" class="nav-link">Dashboard</a>
+                {% else %}
+                    <a href="{{ url_for('user.dashboard') }}" class="nav-link">Dashboard</a>
+                {% endif %}
+                <div class="nav-user">
+                    <span class="nav-user-name">{{ session.get('user_name', '') }}</span>
+                    <span class="nav-role-badge role-{{ session.get('role', '') }}">{{ session.get('role', '') | replace('_', ' ') | title }}</span>
+                    <a href="{{ url_for('auth.logout') }}" class="nav-link logout-link">Logout</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- ─── Flash Messages ──────────────────────────────────────────── -->
+    <div class="flash-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">
+                <span>{{ message }}</span>
+                <button class="flash-close" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- ─── Main Content ────────────────────────────────────────────── -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- ─── Footer ──────────────────────────────────────────────────── -->
+    <footer class="footer">
+        <p>&copy; 2026 Campus Parking Slot Management System</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

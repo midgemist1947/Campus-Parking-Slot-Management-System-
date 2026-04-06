@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h1>Welcome, {{ session.get('user_name') }} 👋</h1>
+        <p class="dash-subtitle">Manage your parking reservations and vehicles</p>
+    </div>
+
+    <!-- ─── Active Reservation Banner ────────────────────────────── -->
+    {% if active_reservation %}
+    <div class="active-res-banner">
+        <div class="banner-content">
+            <div class="banner-icon">🚗</div>
+            <div class="banner-info">
+                <h3>Active Reservation</h3>
+                <p><strong>Slot:</strong> {{ active_reservation.slot.slot_location }} &nbsp;|&nbsp;
+                   <strong>Vehicle:</strong> {{ active_reservation.vehicle.vehicle_number }} &nbsp;|&nbsp;
+                   <strong>Date:</strong> {{ active_reservation.reservation_date }} &nbsp;|&nbsp;
+                   <strong>Time:</strong> {{ active_reservation.reservation_time }}</p>
+            </div>
+            <form method="POST" action="{{ url_for('user.cancel_reservation', reservation_id=active_reservation.reservation_id) }}">
+                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Cancel this reservation?')">Cancel</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ─── Tab Navigation ───────────────────────────────────────── -->
+    <div class="tab-nav">
+        <button class="tab-btn active" data-tab="slots" id="tabSlots">🅿️ Parking Slots</button>
+        <button class="tab-btn" data-tab="reservations" id="tabReservations">📋 My Reservations</button>
+        <button class="tab-btn" data-tab="vehicles" id="tabVehicles">🚘 My Vehicles</button>
+    </div>
+
+    <!-- ═══ TAB: PARKING SLOTS ═══════════════════════════════════ -->
+    <div class="tab-panel active" id="panel-slots">
+        <div class="panel-header">
+            <h2>Available Parking Slots</h2>
+            <div class="slot-controls">
+                <input type="text" id="slotFilter" placeholder="Filter by location..." class="input-sm">
+                <button class="btn btn-secondary btn-sm" onclick="loadSlots()" id="refreshSlotsBtn">↻ Refresh</button>
+            </div>
+        </div>
+        <div class="slot-legend">
+            <span class="legend-item"><span class="legend-dot green"></span> Available</span>
+            <span class="legend-item"><span class="legend-dot red"></span> Occupied</span>
+        </div>
+        <div class="slot-grid" id="slotGrid">
+            <div class="loading-spinner">Loading slots...</div>
+        </div>
+
+        <!-- Reserve Modal -->
+        <div class="modal-overlay" id="reserveModal" style="display:none;">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Reserve Slot</h3>
+                    <button class="modal-close" onclick="closeModal('reserveModal')">&times;</button>
+                </div>
+                <form method="POST" action="{{ url_for('user.reserve_slot') }}" id="reserveForm">
+                    <input type="hidden" name="slot_id" id="reserveSlotId">
+                    <p class="modal-slot-info" id="reserveSlotInfo"></p>
+                    <div class="form-group">
+                        <label for="reserveVehicle">Select Vehicle</label>
+                        <select name="vehicle_id" id="reserveVehicle" required>
+                            {% for v in vehicles %}
+                            <option value="{{ v.vehicle_id }}">{{ v.vehicle_number }} ({{ v.vehicle_type }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% if not vehicles %}
+                    <p class="text-warning">⚠️ You need to add a vehicle first before reserving.</p>
+                    {% endif %}
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('reserveModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary" {% if not vehicles or active_reservation %}disabled{% endif %} id="confirmReserveBtn">
+                            {% if active_reservation %}Already Reserved{% else %}Confirm Reservation{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: RESERVATIONS ════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-reservations">
+        <h2>Reservation History</h2>
+        {% if reservations %}
+        <div class="table-wrap">
+            <table class="data-table" id="reservationTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Slot</th>
+                        <th>Vehicle</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in reservations %}
+                    <tr>
+                        <td>{{ r.reservation_id }}</td>
+                        <td>{{ r.slot.slot_location }}</td>
+                        <td>{{ r.vehicle.vehicle_number }}</td>
+                        <td>{{ r.reservation_date }}</td>
+                        <td>{{ r.reservation_time }}</td>
+                        <td>
+                            <span class="status-badge {{ 'active' if r.is_active else 'cancelled' }}">
+                                {{ 'Active' if r.is_active else 'Cancelled' }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if r.is_active %}
+                            <form method="POST" action="{{ url_for('user.cancel_reservation', reservation_id=r.reservation_id) }}" style="display:inline;">
+                                <button class="btn btn-danger btn-xs" onclick="return confirm('Cancel?')">Cancel</button>
+                            </form>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No reservations yet.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ═══ TAB: VEHICLES ════════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-vehicles">
+        <div class="panel-header">
+            <h2>My Vehicles</h2>
+            <button class="btn btn-primary btn-sm" onclick="openModal('addVehicleModal')" id="addVehicleBtn">+ Add Vehicle</button>
+        </div>
+
+        {% if vehicles %}
+        <div class="card-grid">
+            {% for v in vehicles %}
+            <div class="vehicle-card">
+                <div class="vehicle-icon">
+                    {% if v.vehicle_type == 'Car' %}🚗{% elif v.vehicle_type == 'Bike' %}🏍️{% elif v.vehicle_type == 'Scooter' %}🛵{% else %}🚙{% endif %}
+                </div>
+                <h3>{{ v.vehicle_number }}</h3>
+                <p>{{ v.vehicle_type }}</p>
+                <div class="vehicle-actions">
+                    <button class="btn btn-secondary btn-xs" onclick="openEditVehicle(this.dataset.id, this.dataset.num, this.dataset.type)" data-id="{{ v.vehicle_id }}" data-num="{{ v.vehicle_number }}" data-type="{{ v.vehicle_type }}">Edit</button>
+                    <form method="POST" action="{{ url_for('user.delete_vehicle', vehicle_id=v.vehicle_id) }}" style="display:inline;">
+                        <button class="btn btn-danger btn-xs" onclick="return confirm('Delete this vehicle?')">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No vehicles registered. Add one to start booking!</p>
+        </div>
+        {% endif %}
+
+        <!-- Add Vehicle Modal -->
+        <div class="modal-overlay" id="addVehicleModal" style="display:none;">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Add Vehicle</h3>
+                    <button class="modal-close" onclick="closeModal('addVehicleModal')">&times;</button>
+                </div>
+                <form method="POST" action="{{ url_for('user.add_vehicle') }}">
+                    <div class="form-group">
+                        <label for="addVehicleNumber">Vehicle Number</label>
+                        <input type="text" id="addVehicleNumber" name="vehicle_number" required placeholder="e.g. KA-01-AB-1234">
+                    </div>
+                    <div class="form-group">
+                        <label for="addVehicleType">Vehicle Type</label>
+                        <select name="vehicle_type" id="addVehicleType" required>
+                            <option value="Car">Car</option>
+                            <option value="Bike">Bike</option>
+                            <option value="Scooter">Scooter</option>
+                            <option value="SUV">SUV</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('addVehicleModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="submitAddVehicle">Add Vehicle</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Edit Vehicle Modal -->
+        <div class="modal-overlay" id="editVehicleModal" style="display:none;">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Edit Vehicle</h3>
+                    <button class="modal-close" onclick="closeModal('editVehicleModal')">&times;</button>
+                </div>
+                <form method="POST" id="editVehicleForm" action="">
+                    <div class="form-group">
+                        <label for="editVehicleNumber">Vehicle Number</label>
+                        <input type="text" id="editVehicleNumber" name="vehicle_number" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editVehicleType">Vehicle Type</label>
+                        <select name="vehicle_type" id="editVehicleType" required>
+                            <option value="Car">Car</option>
+                            <option value="Bike">Bike</option>
+                            <option value="Scooter">Scooter</option>
+                            <option value="SUV">SUV</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('editVehicleModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="submitEditVehicle">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Load slots on page load
+    document.addEventListener('DOMContentLoaded', () => { loadSlots(); });
+</script>
+{% endblock %}

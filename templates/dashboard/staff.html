@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block title %}Staff Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h1>Parking Staff Dashboard 👮</h1>
+        <p class="dash-subtitle">Monitor active reservations (read-only)</p>
+    </div>
+
+    <!-- ─── Vehicle Search ───────────────────────────────────────── -->
+    <div class="search-card">
+        <h3>🔍 Search by Vehicle Number</h3>
+        <div class="search-bar">
+            <input type="text" id="vehicleSearch" placeholder="Enter vehicle number..." class="input-lg" autocomplete="off">
+            <button class="btn btn-primary" onclick="searchVehicle()" id="searchBtn">Search</button>
+        </div>
+        <div id="searchResults" class="search-results"></div>
+    </div>
+
+    <!-- ─── Active Reservations ──────────────────────────────────── -->
+    <div class="section-card">
+        <h2>Active Reservations</h2>
+        {% if reservations %}
+        <div class="table-wrap">
+            <table class="data-table" id="staffReservationsTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>User</th>
+                        <th>Email</th>
+                        <th>Vehicle</th>
+                        <th>Type</th>
+                        <th>Slot</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r, u, v, s in reservations %}
+                    <tr>
+                        <td>{{ r.reservation_id }}</td>
+                        <td>{{ u.user_name }}</td>
+                        <td>{{ u.email }}</td>
+                        <td>{{ v.vehicle_number }}</td>
+                        <td>{{ v.vehicle_type }}</td>
+                        <td>{{ s.slot_location }}</td>
+                        <td>{{ r.reservation_date }}</td>
+                        <td>{{ r.reservation_time }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No active reservations at this time.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('vehicleSearch').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') searchVehicle();
+});
+
+function searchVehicle() {
+    const q = document.getElementById('vehicleSearch').value.trim();
+    const container = document.getElementById('searchResults');
+    if (!q) { container.innerHTML = ''; return; }
+
+    fetch(`/staff/api/search?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.length === 0) {
+                container.innerHTML = '<p class="text-muted">No matching reservations found.</p>';
+                return;
+            }
+            let html = '<table class="data-table"><thead><tr><th>ID</th><th>User</th><th>Email</th><th>Vehicle</th><th>Type</th><th>Slot</th><th>Date</th><th>Time</th></tr></thead><tbody>';
+            data.forEach(r => {
+                html += `<tr><td>${r.reservation_id}</td><td>${r.user_name}</td><td>${r.email}</td><td>${r.vehicle_number}</td><td>${r.vehicle_type}</td><td>${r.slot_location}</td><td>${r.reservation_date}</td><td>${r.reservation_time}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        })
+        .catch(() => {
+            container.innerHTML = '<p class="text-muted">Search failed.</p>';
+        });
+}
+</script>
+{% endblock %}

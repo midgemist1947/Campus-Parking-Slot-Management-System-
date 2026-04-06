@@ -1,0 +1,367 @@
+{% extends 'base.html' %}
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h1>Admin Dashboard 🛡️</h1>
+        <p class="dash-subtitle">System overview and management</p>
+    </div>
+
+    <!-- ─── Analytics Cards ──────────────────────────────────────── -->
+    <div class="stats-grid">
+        <div class="stat-card stat-blue">
+            <div class="stat-icon">👥</div>
+            <div class="stat-info">
+                <span class="stat-value">{{ total_users }}</span>
+                <span class="stat-label">Total Users</span>
+            </div>
+        </div>
+        <div class="stat-card stat-green">
+            <div class="stat-icon">🅿️</div>
+            <div class="stat-info">
+                <span class="stat-value">{{ available_slots }}</span>
+                <span class="stat-label">Available Slots</span>
+            </div>
+        </div>
+        <div class="stat-card stat-red">
+            <div class="stat-icon">🚗</div>
+            <div class="stat-info">
+                <span class="stat-value">{{ occupied_slots }}</span>
+                <span class="stat-label">Occupied Slots</span>
+            </div>
+        </div>
+        <div class="stat-card stat-purple">
+            <div class="stat-icon">📋</div>
+            <div class="stat-info">
+                <span class="stat-value">{{ active_reservations }}</span>
+                <span class="stat-label">Active Bookings</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Utilization Bar ──────────────────────────────────────── -->
+    <div class="utilization-card">
+        <h3>Slot Utilization</h3>
+        <div class="progress-bar-wrap">
+            {% set util_percent = ((occupied_slots / total_slots * 100) | round(1)) if total_slots > 0 else 0 %}
+            <div class="progress-bar" id="utilizationBar">
+                {{ util_percent }}%
+            </div>
+            <script>document.getElementById('utilizationBar').style.width = "{{ util_percent }}%";</script>
+        </div>
+        <p class="util-detail">{{ occupied_slots }} of {{ total_slots }} slots occupied</p>
+    </div>
+
+    <!-- ─── Tab Navigation ───────────────────────────────────────── -->
+    <div class="tab-nav">
+        <button class="tab-btn active" data-tab="manage-slots" id="tabManageSlots">🅿️ Manage Slots</button>
+        <button class="tab-btn" data-tab="manage-users" id="tabManageUsers">👥 Manage Users</button>
+        <button class="tab-btn" data-tab="view-reservations" id="tabViewReservations">📋 Reservations</button>
+        <button class="tab-btn" data-tab="reports" id="tabReports">📊 Reports</button>
+    </div>
+
+    <!-- ═══ TAB: MANAGE SLOTS ════════════════════════════════════ -->
+    <div class="tab-panel active" id="panel-manage-slots">
+        <div class="panel-header">
+            <h2>Parking Slots</h2>
+            <button class="btn btn-primary btn-sm" onclick="openModal('addSlotModal')" id="addSlotBtn">+ Add Slot</button>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table" id="slotsTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Location</th>
+                        <th>Status</th>
+                        <th>Active</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in slots %}
+                    <tr class="{{ 'row-inactive' if not s.is_active }}">
+                        <td>{{ s.slot_id }}</td>
+                        <td>{{ s.slot_location }}</td>
+                        <td><span class="status-badge {{ 'available' if s.slot_status == 'Available' else 'occupied' }}">{{ s.slot_status }}</span></td>
+                        <td><span class="status-badge {{ 'active' if s.is_active else 'inactive' }}">{{ 'Yes' if s.is_active else 'No' }}</span></td>
+                        <td class="action-btns">
+                            <button class="btn btn-secondary btn-xs" onclick="openEditSlot(this.dataset.id, this.dataset.loc)" data-id="{{ s.slot_id }}" data-loc="{{ s.slot_location }}">Edit</button>
+                            {% if s.is_active %}
+                            <form method="POST" action="{{ url_for('admin.delete_slot', slot_id=s.slot_id) }}" style="display:inline;">
+                                <button class="btn btn-danger btn-xs" onclick="return confirm('Deactivate this slot?')">Deactivate</button>
+                            </form>
+                            {% else %}
+                            <form method="POST" action="{{ url_for('admin.restore_slot', slot_id=s.slot_id) }}" style="display:inline;">
+                                <button class="btn btn-success btn-xs">Restore</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Add Slot Modal -->
+        <div class="modal-overlay" id="addSlotModal" style="display:none;">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Add Parking Slot</h3>
+                    <button class="modal-close" onclick="closeModal('addSlotModal')">&times;</button>
+                </div>
+                <form method="POST" action="{{ url_for('admin.add_slot') }}">
+                    <div class="form-group">
+                        <label for="addSlotLocation">Slot Location</label>
+                        <input type="text" id="addSlotLocation" name="slot_location" required placeholder="e.g. Block A - Slot 1">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('addSlotModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Slot</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Edit Slot Modal -->
+        <div class="modal-overlay" id="editSlotModal" style="display:none;">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Edit Slot</h3>
+                    <button class="modal-close" onclick="closeModal('editSlotModal')">&times;</button>
+                </div>
+                <form method="POST" id="editSlotForm" action="">
+                    <div class="form-group">
+                        <label for="editSlotLocation">Slot Location</label>
+                        <input type="text" id="editSlotLocation" name="slot_location" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('editSlotModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: MANAGE USERS ════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-manage-users">
+        <div class="panel-header">
+            <h2>Users</h2>
+            <button class="btn btn-primary btn-sm" onclick="openModal('addUserModal')" id="addUserBtn">+ Create User</button>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table" id="usersTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Role</th>
+                        <th>Locked</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr class="{{ 'row-inactive' if u.is_locked }}">
+                        <td>{{ u.user_id }}</td>
+                        <td>{{ u.user_name }}</td>
+                        <td>{{ u.email }}</td>
+                        <td>{{ u.phone_number or '—' }}</td>
+                        <td><span class="nav-role-badge role-{{ u.role }}">{{ u.role | replace('_', ' ') | title }}</span></td>
+                        <td>
+                            {% if u.is_locked %}
+                            <span class="status-badge inactive">Locked</span>
+                            {% else %}
+                            <span class="status-badge active">Active</span>
+                            {% endif %}
+                        </td>
+                        <td class="action-btns">
+                            {% if u.is_locked %}
+                            <form method="POST" action="{{ url_for('admin.activate_user', user_id=u.user_id) }}" style="display:inline;">
+                                <button class="btn btn-success btn-xs">Unlock</button>
+                            </form>
+                            {% else %}
+                            <form method="POST" action="{{ url_for('admin.deactivate_user', user_id=u.user_id) }}" style="display:inline;">
+                                <button class="btn btn-danger btn-xs" onclick="return confirm('Lock this user?')">Lock</button>
+                            </form>
+                            {% endif %}
+                            <button class="btn btn-secondary btn-xs" onclick="openResetPassword(this.dataset.id, this.dataset.username)" data-id="{{ u.user_id }}" data-username="{{ u.user_name }}">Reset PW</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Add User Modal -->
+        <div class="modal-overlay" id="addUserModal" style="display:none;">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Create User</h3>
+                    <button class="modal-close" onclick="closeModal('addUserModal')">&times;</button>
+                </div>
+                <form method="POST" action="{{ url_for('admin.add_user') }}">
+                    <div class="form-group">
+                        <label for="newUserName">Full Name</label>
+                        <input type="text" id="newUserName" name="user_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newUserEmail">Email</label>
+                        <input type="email" id="newUserEmail" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newUserPhone">Phone</label>
+                        <input type="text" id="newUserPhone" name="phone_number">
+                    </div>
+                    <div class="form-group">
+                        <label for="newUserPassword">Password</label>
+                        <input type="password" id="newUserPassword" name="password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newUserRole">Role</label>
+                        <select name="role" id="newUserRole" required>
+                            <option value="student">Student</option>
+                            <option value="staff">Staff</option>
+                            <option value="parking_staff">Parking Staff</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('addUserModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create User</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Reset Password Modal -->
+        <div class="modal-overlay" id="resetPasswordModal" style="display:none;">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Reset Password</h3>
+                    <button class="modal-close" onclick="closeModal('resetPasswordModal')">&times;</button>
+                </div>
+                <form method="POST" id="resetPasswordForm" action="">
+                    <p id="resetPasswordUser" class="modal-slot-info"></p>
+                    <div class="form-group">
+                        <label for="resetNewPassword">New Password</label>
+                        <input type="password" id="resetNewPassword" name="new_password" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('resetPasswordModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Reset Password</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: RESERVATIONS ════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-view-reservations">
+        <h2>All Reservations</h2>
+        <div class="table-wrap">
+            <table class="data-table" id="adminReservationsTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>User</th>
+                        <th>Vehicle</th>
+                        <th>Slot</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in reservations %}
+                    <tr>
+                        <td>{{ r.reservation_id }}</td>
+                        <td>{{ r.user.user_name }}</td>
+                        <td>{{ r.vehicle.vehicle_number }}</td>
+                        <td>{{ r.slot.slot_location }}</td>
+                        <td>{{ r.reservation_date }}</td>
+                        <td>{{ r.reservation_time }}</td>
+                        <td><span class="status-badge {{ 'active' if r.is_active else 'cancelled' }}">{{ 'Active' if r.is_active else 'Cancelled' }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: REPORTS ═════════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-reports">
+        <div class="panel-header">
+            <h2>Reports & Analytics</h2>
+            <a href="{{ url_for('admin.export_csv') }}" class="btn btn-primary btn-sm" id="exportCsvBtn">📥 Export CSV</a>
+        </div>
+        <div class="report-grid" id="reportDashboard">
+            <div class="report-card">
+                <h3>📊 Booking Summary</h3>
+                <div id="bookingSummary" class="report-content">Loading...</div>
+            </div>
+            <div class="report-card">
+                <h3>⏰ Peak Hours</h3>
+                <div id="peakHoursChart" class="report-content">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Load report data when reports tab is shown
+    document.querySelector('[data-tab="reports"]').addEventListener('click', loadReports);
+});
+
+function loadReports() {
+    fetch('/admin/api/reports/summary')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('bookingSummary').innerHTML = `
+                <div class="report-stats">
+                    <div class="report-stat"><span class="report-stat-val">${data.total_bookings}</span><span class="report-stat-lbl">Total Bookings</span></div>
+                    <div class="report-stat"><span class="report-stat-val">${data.active_bookings}</span><span class="report-stat-lbl">Active</span></div>
+                    <div class="report-stat"><span class="report-stat-val">${data.cancelled_bookings}</span><span class="report-stat-lbl">Cancelled</span></div>
+                    <div class="report-stat"><span class="report-stat-val">${data.utilization_percent}%</span><span class="report-stat-lbl">Utilization</span></div>
+                </div>`;
+
+            // Simple bar chart for peak hours
+            if (data.peak_hours.length > 0) {
+                const maxCount = Math.max(...data.peak_hours.map(h => h.count));
+                let barsHtml = '<div class="bar-chart">';
+                for (let h = 0; h < 24; h++) {
+                    const entry = data.peak_hours.find(x => x.hour === h);
+                    const count = entry ? entry.count : 0;
+                    const pct = maxCount > 0 ? (count / maxCount * 100) : 0;
+                    barsHtml += `<div class="bar-col"><div class="bar" style="height:${pct}%;" title="${count} bookings"></div><span class="bar-label">${h}</span></div>`;
+                }
+                barsHtml += '</div>';
+                document.getElementById('peakHoursChart').innerHTML = barsHtml;
+            } else {
+                document.getElementById('peakHoursChart').innerHTML = '<p class="text-muted">No booking data available.</p>';
+            }
+        })
+        .catch(() => {
+            document.getElementById('bookingSummary').innerHTML = '<p class="text-muted">Failed to load report data.</p>';
+        });
+}
+
+function openEditSlot(id, location) {
+    document.getElementById('editSlotForm').action = `/admin/slot/edit/${id}`;
+    document.getElementById('editSlotLocation').value = location;
+    openModal('editSlotModal');
+}
+
+function openResetPassword(userId, userName) {
+    document.getElementById('resetPasswordForm').action = `/admin/user/reset-password/${userId}`;
+    document.getElementById('resetPasswordUser').textContent = `Resetting password for: ${userName}`;
+    openModal('resetPasswordModal');
+}
+</script>
+{% endblock %}
